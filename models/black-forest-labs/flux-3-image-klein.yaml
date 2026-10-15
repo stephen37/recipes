@@ -9,9 +9,11 @@ meta:
     - omni
   performance_headline: "One 5.6B DiT for generation, multi-reference editing and bounding-box layout; the distilled checkpoint samples in 16 steps without CFG"
   related_recipes: []
-  # No verified entry yet: nothing has been run end-to-end through vLLM-Omni
-  # on the hardware below. Add `<gpu>: verified` after a real serve + request.
-  hardware: {}
+  # b200: one B200, Inferact/efn nv/flux3-image (PR #18 + #20) on vllm 0.29.0,
+  # the three serve commands below, t2i + i2i through both endpoints.
+  hardware:
+    b200: verified
+  default_hardware: b200
 
 model:
   model_id: "black-forest-labs/flux-3-image-klein"
@@ -97,7 +99,7 @@ dependencies:
   # not read here; leaving them out saves 11 GB. variants/ carries the FP8 and
   # NVFP4 DiTs for the FP8 / NVFP4 pills.
   - note: "Download the package to a local directory. 31 GB with the FP8 and NVFP4 variants; add --exclude 'variants/*' for BF16 only (20 GB)."
-    command: "hf download black-forest-labs/flux-3-image-klein --local-dir /path/to/flux-3-image-klein --exclude 'transformer/*' 'vae/*'"
+    command: "hf download black-forest-labs/flux-3-image-klein --local-dir /path/to/flux-3-image-klein --exclude 'transformer/*' --exclude 'vae/*'"
     install_modes: [pip, docker]
 
 features: {}
@@ -108,24 +110,24 @@ variants:
   default:
     label: "BF16"
     precision: bf16
-    # 20.3 GB of weights (DiT 11.1, text encoder 8.9, autoencoder 0.3). The
-    # reference implementation peaks at 31 GB on a B200 at 1024x1024; vLLM-Omni
-    # peak memory is [TO CONFIRM].
-    vram_minimum_gb: 32
-    description: "Root package, BF16 DiT. 31 GB peak at 1024x1024 with the reference implementation on a B200."
+    # 20.3 GB of weights (DiT 11.1, text encoder 8.9, autoencoder 0.3).
+    # Measured 22.6 GB on one B200 at 1024x1024 after a t2i and an i2i request
+    # (nvidia-smi); the reference implementation reports 31 GB.
+    vram_minimum_gb: 25
+    description: "Root package, BF16 DiT. 22.6 GB on one B200 at 1024x1024; 0.74 s per image at 16 steps."
   fp8:
     label: "FP8"
     precision: fp8
-    vram_minimum_gb: 27
-    description: "variants/fp8r: rowwise FP8 DiT (E4M3 weights, fp32 per-row scales), same text encoder and autoencoder. 26 GB peak with the reference implementation."
+    vram_minimum_gb: 20
+    description: "variants/fp8r: rowwise FP8 DiT (E4M3 weights, fp32 per-row scales), same text encoder and autoencoder. 18.1 GB on one B200; 0.64 s per image."
     extra_args:
       - "--stage-overrides"
       - '{"0":{"additional_config":{"variant":"fp8r"}}}'
   nvfp4:
     label: "NVFP4"
     precision: nvfp4
-    vram_minimum_gb: 26
-    description: "variants/nvfp4: NVFP4 DiT in the ModelOpt layout, Blackwell. 25 GB peak with the reference implementation. Install the PrimsTS kernels for this one (see the guide)."
+    vram_minimum_gb: 19
+    description: "variants/nvfp4: NVFP4 DiT in the ModelOpt layout, Blackwell. 17.2 GB on one B200; 0.74 s per image on vLLM's CUTLASS kernel (PrimsTS not installed)."
     extra_args:
       - "--stage-overrides"
       - '{"0":{"additional_config":{"variant":"nvfp4"}}}'
@@ -166,7 +168,7 @@ guide: |
   ```bash
   hf download black-forest-labs/flux-3-image-klein \
     --local-dir /path/to/flux-3-image-klein \
-    --exclude 'transformer/*' 'vae/*'
+    --exclude 'transformer/*' --exclude 'vae/*'
   ```
 
   31 GB. `transformer/` and `vae/` are the Diffusers copies of the same weights
@@ -213,9 +215,10 @@ guide: |
   uv pip install -e '.[prims-ts]'
   ```
 
-  [TO CONFIRM: vLLM-Omni] whether the `flux-3` image includes them. NVFP4
-  without PrimsTS currently drifts from the reference implementation on B200;
-  with PrimsTS it matches.
+  [TO CONFIRM: vLLM-Omni] whether the `flux-3` image includes them. The
+  numbers in this recipe were measured without PrimsTS (vLLM's CUTLASS NVFP4
+  and FP8 kernels). NVFP4 without PrimsTS currently drifts from the reference
+  implementation on B200; with PrimsTS it matches.
 
   ### FP8 attention
 
@@ -234,9 +237,15 @@ guide: |
   ## Requests
 
   Sampling defaults come from the package: 16 steps, no guidance, 1024x1024.
-  `num_inference_steps`, `seed` and `flow_shift` (the timestep shift, 6.93)
+  A request without `num_inference_steps` returns the same image as one with
+  16. `num_inference_steps`, `seed` and `flow_shift` (the timestep shift, 6.93)
   can be overridden per request. `guidance_scale` and a non-empty
-  `negative_prompt` are rejected on the distilled checkpoint.
+  `negative_prompt` are rejected on the distilled checkpoint (HTTP 500,
+  "The sd variant does not support guidance_scale").
+
+  Expect about 5 minutes from `vllm serve` to the first healthy `/health`:
+  regional `torch.compile` of the 43 DiT blocks plus a warmup run. The first
+  request after that costs 1.2-2.9 s; later ones 0.6-0.8 s.
 
   ### Text to image
 
@@ -304,17 +313,25 @@ guide: |
   prompts into that form. It is a separate model and not part of this serving
   path; run it as its own vLLM instance if your prompts are short.
 
-  ## Memory
+  ## Measured
 
-  Peak GPU memory with the reference implementation, B200, 1024x1024, prompt
-  upsampler off:
+  One B200, vLLM 0.29.0 with the FLUX 3 pipeline, 1024x1024, 16 steps, seed
+  42, the three serve commands above. Memory is `nvidia-smi` after a t2i and
+  an i2i request; seconds are the second request (the first includes warmup).
 
   | | BF16 | FP8 | NVFP4 |
   |---|---|---|---|
-  | distilled | 31 GB | 26 GB | 25 GB |
-  | base | 31 GB | 29 GB | 26 GB |
+  | GPU memory | 22.6 GB | 18.1 GB | 17.2 GB |
+  | text-to-image | 0.74 s | 0.64 s | 0.74 s |
+  | editing, 1 reference | 1.81 s | 1.57 s | 1.48 s |
+  | startup to healthy | 385 s | 294 s | 284 s |
 
-  vLLM-Omni peak memory is [TO CONFIRM].
+  PrimsTS was not installed, so FP8 and NVFP4 ran on vLLM's kernels. The
+  three variants return the same composition at the same seed; FP8 and NVFP4
+  differ from BF16 by a mean of 3-4/255 per pixel.
+
+  For comparison, the reference implementation reports 31 / 26 / 25 GB peak
+  on a B200 for BF16 / FP8 / NVFP4, prompt upsampler off.
 
   ## Limitations
 

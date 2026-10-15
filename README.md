@@ -9,6 +9,10 @@ This repo intends to host community maintained common recipes to run vLLM answer
 
 - [Trinity-Large-Thinking](ArceeAI/Trinity-Large-Thinking.md)
 
+### Black Forest Labs <img src="https://cdn-avatars.huggingface.co/v1/production/uploads/633f7a8f4be90e06da248e0f/m5YoF33abJ09vcwFxt1Mj.png" alt="Black Forest Labs" width="16" height="16" style="vertical-align:middle;">
+
+- [FLUX 3 Image Klein](models/black-forest-labs/flux-3-image-klein.yaml)
+
 ### DeepSeek <img src="https://avatars.githubusercontent.com/u/148330874?s=200&v=4" alt="DeepSeek" width="16" height="16" style="vertical-align:middle;">
 
 - [DeepSeek-OCR](DeepSeek/DeepSeek-OCR.md)

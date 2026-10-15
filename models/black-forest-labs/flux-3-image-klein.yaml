@@ -51,17 +51,16 @@ omni:
   tasks:
     - id: t2i
       model_id: "/path/to/flux-3-image-klein"
-      description: "Text to image. 16 steps, no CFG, 1024x1024 unless the request sets a size."
+      description: "Text to image. 16 steps, no CFG, 1024x1024 unless the request sets a size. The example prompt carries five bounding boxes and a text element."
       curl: |
         curl -X POST http://localhost:8000/v1/images/generations \
           -H "Content-Type: application/json" \
           -d '{
             "model": "flux-3-image-klein",
-            "prompt": "A wide-angle photograph of a lone American bison in a misty geothermal landscape, half hidden by white steam, a slate-blue stream and evergreens fading into the mist behind. Muted, cool palette, soft overcast light.",
-            "size": "1024x1024",
-            "num_inference_steps": 16,
-            "seed": 42
-          }' | jq -r '.data[0].b64_json' | base64 -d > bison.png
+            "prompt": "Macro photograph of a chunky knitted soft sculpture diorama, lit by a low, directional light source from the left that casts long, deep shadows across the textures. Filling the upper background is a dark indigo knitted backdrop. Across the lower third, a chaotic bed of thick looped yarn forms a churning sea. Rising from this base are three massive, conical icebergs constructed of stark white cable-knit yarn, positioned in a rhythmic frontal row: one on the left <iceberg_1>, a slightly taller one on the right <iceberg_2>, and a bulky central peak <iceberg_3>. Clinging to the slopes of the outer icebergs is a rhythmic repetition of tiny, identical pale blue knitted houses. Suspended in the upper frame between the peaks is a slightly curling strip of cream-colored stockinette fabric, bearing thick embroidered text <En_Text_1>. Disrupting the icy white and blue palette, a giant, vibrant magenta knitted whale tail <whale_tail_1> bursts vertically from the center of the teal sea, its thick ribbed surface covered in a halo of stray wool fibers illuminated by the raking light. [{\"id\": \"iceberg_1\", \"bbox\": [300, 50, 750, 350], \"desc\": \"A conical soft sculpture made of stark white, chunky roving yarn in a thick cable-knit pattern. The left side is brightly lit, while the right side falls into deep, fuzzy shadow.\"}, {\"id\": \"iceberg_2\", \"bbox\": [250, 650, 750, 950], \"desc\": \"A tall, asymmetrical peak of white cable-knit yarn, featuring a few visibly dropped stitches near the base and slightly uneven tension in the cables.\"}, {\"id\": \"iceberg_3\", \"bbox\": [200, 300, 650, 700], \"desc\": \"The largest central iceberg, a bulky mound of white and pale grey ribbed knitting, dominating the midground with thick, vertical columns of stitches.\"}, {\"id\": \"En_Text_1\", \"bbox\": [130, 220, 220, 780], \"desc\": \"The exact words \\\"KNITTED ICEBERG VILLAGE\\\" embroidered in thick, raised navy-blue yarn across the cream banner. The lettering is slightly uneven and puckered, conforming to the physical stretch of the knitted fabric beneath it.\"}, {\"id\": \"whale_tail_1\", \"bbox\": [500, 380, 850, 620], \"desc\": \"A giant whale tail knitted from bright magenta and coral-pink yarn, bursting vertically from the teal sea. It features thick ribs, a slightly asymmetrical fluke, and a fuzzy halo of stray wool fibers caught in the directional light.\"}] [{\"id\": \"iceberg_1\", \"bbox\": [300, 50, 750, 350], \"desc\": \"A conical soft sculpture made of stark white, chunky roving yarn in a thick cable-knit pattern. The left side is brightly lit, while the right side falls into deep, fuzzy shadow.\"}, {\"id\": \"iceberg_2\", \"bbox\": [250, 650, 750, 950], \"desc\": \"A tall, asymmetrical peak of white cable-knit yarn, featuring a few visibly dropped stitches near the base and slightly uneven tension in the cables.\"}, {\"id\": \"iceberg_3\", \"bbox\": [200, 300, 650, 700], \"desc\": \"The largest central iceberg, a bulky mound of white and pale grey ribbed knitting, dominating the midground with thick, vertical columns of stitches.\"}, {\"id\": \"En_Text_1\", \"bbox\": [130, 220, 220, 780], \"desc\": \"The exact words \\\"KNITTED ICEBERG VILLAGE\\\" embroidered in thick, raised navy-blue yarn across the cream banner. The lettering is slightly uneven and puckered, conforming to the physical stretch of the knitted fabric beneath it.\"}, {\"id\": \"whale_tail_1\", \"bbox\": [500, 380, 850, 620], \"desc\": \"A giant whale tail knitted from bright magenta and coral-pink yarn, bursting vertically from the teal sea. It features thick ribs, a slightly asymmetrical fluke, and a fuzzy halo of stray wool fibers caught in the directional light.\"}]",
+            "size": "1184x896",
+            "seed": 1
+          }' | jq -r '.data[0].b64_json' | base64 -d > knitted.png
       benchmark: |
         python3 /path/to/vllm-omni/benchmarks/diffusion/diffusion_benchmark_serving.py \
           --base-url http://localhost:8000 \
@@ -79,11 +78,11 @@ omni:
           -d '{
             "model": "flux-3-image-klein",
             "messages": [{"role": "user", "content": [
-              {"type": "text", "text": "The same lone American bison in the same misty geothermal landscape, now at night under a full moon: the steam lit from behind, cool blue light, deep shadows, stars above the evergreens."},
+              {"type": "text", "text": "The same chunky knitted soft sculpture diorama, same three white cable-knit icebergs with tiny pale blue houses, same cream banner with the embroidered words \"KNITTED ICEBERG VILLAGE\", same magenta whale tail, now under a dark indigo night backdrop with a round knitted full moon of cream yarn in the upper right, the raking light cooler and bluer, deep shadows across the yarn sea, a few tiny white embroidered stars above the peaks."},
               {"type": "image_url", "image_url": {"url": "data:image/png;base64,<BASE64_IMAGE>"}}
             ]}],
-            "extra_body": {"num_inference_steps": 16, "seed": 42}
-          }' | jq -r '.choices[0].message.content[0].image_url.url' | cut -d',' -f2- | base64 -d > bison_night.png
+            "extra_body": {"seed": 1}
+          }' | jq -r '.choices[0].message.content[0].image_url.url' | cut -d',' -f2- | base64 -d > knitted_night.png
       # The diffusion benchmark's random dataset drives text-to-image. Time
       # one edit request instead.
       benchmark: |
@@ -111,15 +110,15 @@ variants:
     label: "BF16"
     precision: bf16
     # 20.3 GB of weights (DiT 11.1, text encoder 8.9, autoencoder 0.3).
-    # Measured 22.6 GB on one B200 at 1024x1024 after a t2i and an i2i request
+    # Measured 22.9 GB on one B200 at 1184x896 after a t2i and an i2i request
     # (nvidia-smi); the reference implementation reports 31 GB.
     vram_minimum_gb: 25
-    description: "Root package, BF16 DiT. 22.6 GB on one B200 at 1024x1024; 0.74 s per image at 16 steps."
+    description: "Root package, BF16 DiT. 22.9 GB on one B200 at 1184x896; 0.92 s per image at 16 steps."
   fp8:
     label: "FP8"
     precision: fp8
     vram_minimum_gb: 20
-    description: "variants/fp8r: rowwise FP8 DiT (E4M3 weights, fp32 per-row scales), same text encoder and autoencoder. 18.1 GB on one B200; 0.64 s per image."
+    description: "variants/fp8r: rowwise FP8 DiT (E4M3 weights, fp32 per-row scales), same text encoder and autoencoder. 18.4 GB on one B200; 0.78 s per image."
     extra_args:
       - "--stage-overrides"
       - '{"0":{"additional_config":{"variant":"fp8r"}}}'
@@ -127,7 +126,7 @@ variants:
     label: "NVFP4"
     precision: nvfp4
     vram_minimum_gb: 19
-    description: "variants/nvfp4: NVFP4 DiT in the ModelOpt layout, Blackwell. 17.2 GB on one B200; 0.74 s per image on vLLM's CUTLASS kernel (PrimsTS not installed)."
+    description: "variants/nvfp4: NVFP4 DiT in the ModelOpt layout, Blackwell. 17.5 GB on one B200; 0.78 s per image on vLLM's CUTLASS kernel (PrimsTS not installed)."
     extra_args:
       - "--stage-overrides"
       - '{"0":{"additional_config":{"variant":"nvfp4"}}}'
@@ -250,16 +249,17 @@ guide: |
   ### Text to image
 
   JSON to `/v1/images/generations`. The picture comes back base64-encoded at
-  `.data[0].b64_json`. Sizes are multiples of 16.
+  `.data[0].b64_json`. Sizes are multiples of 16. The prompt below is one of
+  the model's own examples: a caption with `<id>` tags on five elements and a
+  JSON list of boxes at the end (see Bounding boxes).
 
   ```bash
   curl -X POST http://localhost:8000/v1/images/generations \
     -H "Content-Type: application/json" \
     -d '{"model": "flux-3-image-klein",
-         "prompt": "A wide-angle photograph of a lone American bison in a misty geothermal landscape, half hidden by white steam, a slate-blue stream and evergreens fading into the mist behind. Muted, cool palette, soft overcast light.",
-         "size": "1024x1024",
-         "num_inference_steps": 16,
-         "seed": 42}' | jq -r '.data[0].b64_json' | base64 -d > bison.png
+         "prompt": "Macro photograph of a chunky knitted soft sculpture diorama, lit by a low, directional light source from the left that casts long, deep shadows across the textures. Filling the upper background is a dark indigo knitted backdrop. Across the lower third, a chaotic bed of thick looped yarn forms a churning sea. Rising from this base are three massive, conical icebergs constructed of stark white cable-knit yarn, positioned in a rhythmic frontal row: one on the left <iceberg_1>, a slightly taller one on the right <iceberg_2>, and a bulky central peak <iceberg_3>. Clinging to the slopes of the outer icebergs is a rhythmic repetition of tiny, identical pale blue knitted houses. Suspended in the upper frame between the peaks is a slightly curling strip of cream-colored stockinette fabric, bearing thick embroidered text <En_Text_1>. Disrupting the icy white and blue palette, a giant, vibrant magenta knitted whale tail <whale_tail_1> bursts vertically from the center of the teal sea, its thick ribbed surface covered in a halo of stray wool fibers illuminated by the raking light. [{\"id\": \"iceberg_1\", \"bbox\": [300, 50, 750, 350], \"desc\": \"A conical soft sculpture made of stark white, chunky roving yarn in a thick cable-knit pattern. The left side is brightly lit, while the right side falls into deep, fuzzy shadow.\"}, {\"id\": \"iceberg_2\", \"bbox\": [250, 650, 750, 950], \"desc\": \"A tall, asymmetrical peak of white cable-knit yarn, featuring a few visibly dropped stitches near the base and slightly uneven tension in the cables.\"}, {\"id\": \"iceberg_3\", \"bbox\": [200, 300, 650, 700], \"desc\": \"The largest central iceberg, a bulky mound of white and pale grey ribbed knitting, dominating the midground with thick, vertical columns of stitches.\"}, {\"id\": \"En_Text_1\", \"bbox\": [130, 220, 220, 780], \"desc\": \"The exact words \\\"KNITTED ICEBERG VILLAGE\\\" embroidered in thick, raised navy-blue yarn across the cream banner. The lettering is slightly uneven and puckered, conforming to the physical stretch of the knitted fabric beneath it.\"}, {\"id\": \"whale_tail_1\", \"bbox\": [500, 380, 850, 620], \"desc\": \"A giant whale tail knitted from bright magenta and coral-pink yarn, bursting vertically from the teal sea. It features thick ribs, a slightly asymmetrical fluke, and a fuzzy halo of stray wool fibers caught in the directional light.\"}] [{\"id\": \"iceberg_1\", \"bbox\": [300, 50, 750, 350], \"desc\": \"A conical soft sculpture made of stark white, chunky roving yarn in a thick cable-knit pattern. The left side is brightly lit, while the right side falls into deep, fuzzy shadow.\"}, {\"id\": \"iceberg_2\", \"bbox\": [250, 650, 750, 950], \"desc\": \"A tall, asymmetrical peak of white cable-knit yarn, featuring a few visibly dropped stitches near the base and slightly uneven tension in the cables.\"}, {\"id\": \"iceberg_3\", \"bbox\": [200, 300, 650, 700], \"desc\": \"The largest central iceberg, a bulky mound of white and pale grey ribbed knitting, dominating the midground with thick, vertical columns of stitches.\"}, {\"id\": \"En_Text_1\", \"bbox\": [130, 220, 220, 780], \"desc\": \"The exact words \\\"KNITTED ICEBERG VILLAGE\\\" embroidered in thick, raised navy-blue yarn across the cream banner. The lettering is slightly uneven and puckered, conforming to the physical stretch of the knitted fabric beneath it.\"}, {\"id\": \"whale_tail_1\", \"bbox\": [500, 380, 850, 620], \"desc\": \"A giant whale tail knitted from bright magenta and coral-pink yarn, bursting vertically from the teal sea. It features thick ribs, a slightly asymmetrical fluke, and a fuzzy halo of stray wool fibers caught in the directional light.\"}]",
+         "size": "1184x896",
+         "seed": 1}' | jq -r '.data[0].b64_json' | base64 -d > knitted.png
   ```
 
   ### Editing
@@ -267,18 +267,20 @@ guide: |
   JSON to `/v1/chat/completions` with the reference as an `image_url` content
   part. Up to 4 references per request, one part each; the output keeps the
   first reference's aspect ratio at 1 MP unless `height` and `width` are set.
-  The picture is at `.choices[0].message.content[0].image_url.url`.
+  The picture is at `.choices[0].message.content[0].image_url.url`. The edit
+  below takes `knitted.png` from the previous call to night: the caption
+  restates the whole scene and folds the change in.
 
   ```bash
   curl -X POST http://localhost:8000/v1/chat/completions \
     -H "Content-Type: application/json" \
     -d '{"model": "flux-3-image-klein",
          "messages": [{"role": "user", "content": [
-           {"type": "text", "text": "The same lone American bison in the same misty geothermal landscape, now at night under a full moon: the steam lit from behind, cool blue light, deep shadows, stars above the evergreens."},
+           {"type": "text", "text": "The same chunky knitted soft sculpture diorama, same three white cable-knit icebergs with tiny pale blue houses, same cream banner with the embroidered words \"KNITTED ICEBERG VILLAGE\", same magenta whale tail, now under a dark indigo night backdrop with a round knitted full moon of cream yarn in the upper right, the raking light cooler and bluer, deep shadows across the yarn sea, a few tiny white embroidered stars above the peaks."},
            {"type": "image_url", "image_url": {"url": "data:image/png;base64,<BASE64_IMAGE>"}}
          ]}],
-         "extra_body": {"num_inference_steps": 16, "seed": 42}}' \
-    | jq -r '.choices[0].message.content[0].image_url.url' | cut -d',' -f2- | base64 -d > bison_night.png
+         "extra_body": {"seed": 1}}' \
+    | jq -r '.choices[0].message.content[0].image_url.url' | cut -d',' -f2- | base64 -d > knitted_night.png
   ```
 
   References are used at their own size, center-cropped to a 16 px grid.
@@ -287,10 +289,12 @@ guide: |
 
   Layout is part of the prompt, so it works on both endpoints. Tag an element
   in the caption with `<id>` and append a JSON list of boxes; each box is
-  `[top, left, bottom, right]` on a 0 to 1000 grid:
+  `[top, left, bottom, right]` on a 0 to 1000 grid, each entry carries the
+  element's own `desc`. The text-to-image example above places three
+  icebergs, a banner and a whale tail this way; the shape of one entry:
 
   ```text
-  Minimalist graphic illustration featuring a black silhouette of a person <silhouette_1> centered against a solid, vibrant chartreuse background <background_1>. The figure is captured in a dynamic, mid-stride running pose, facing toward the left side of the frame. [{"id": "background_1", "bbox": [0, 0, 1000, 1000], "desc": "A flat field of neon yellow-green with a subtle paper texture and fine, organic grain."}, {"id": "silhouette_1", "bbox": [150, 150, 850, 850], "desc": "A black silhouette of a person in motion, made of dense stippled ink."}]
+  ... a cream banner <En_Text_1> ... [{"id": "En_Text_1", "bbox": [130, 220, 220, 780], "desc": "The exact words \"KNITTED ICEBERG VILLAGE\" embroidered in thick, raised navy-blue yarn across the cream banner."}, ...]
   ```
 
   Boxes set placement and scale, not a hard mask: an element can extend past
@@ -315,20 +319,23 @@ guide: |
 
   ## Measured
 
-  One B200, vLLM 0.29.0 with the FLUX 3 pipeline, 1024x1024, 16 steps, seed
-  42, the three serve commands above. Memory is `nvidia-smi` after a t2i and
-  an i2i request; seconds are the second request (the first includes warmup).
+  One B200, vLLM 0.29.0 with the FLUX 3 pipeline, the three serve commands
+  above and the two requests above (1184x896, 16 steps, seed 1, five boxes
+  and a text element). Memory is `nvidia-smi` after a t2i and an i2i
+  request; seconds are the second request (the first includes warmup).
 
   | | BF16 | FP8 | NVFP4 |
   |---|---|---|---|
-  | GPU memory | 22.6 GB | 18.1 GB | 17.2 GB |
-  | text-to-image | 0.74 s | 0.64 s | 0.74 s |
-  | editing, 1 reference | 1.81 s | 1.57 s | 1.48 s |
+  | GPU memory | 22.9 GB | 18.4 GB | 17.5 GB |
+  | text-to-image | 0.92 s | 0.78 s | 0.78 s |
+  | editing, 1 reference | 1.87 s | 1.56 s | 1.48 s |
   | startup to healthy | 385 s | 294 s | 284 s |
 
-  PrimsTS was not installed, so FP8 and NVFP4 ran on vLLM's kernels. The
-  three variants return the same composition at the same seed; FP8 and NVFP4
-  differ from BF16 by a mean of 3-4/255 per pixel.
+  At 1024x1024 with a plain caption: 0.74 / 0.64 / 0.74 s, 22.6 / 18.1 /
+  17.2 GB. PrimsTS was not installed, so FP8 and NVFP4 ran on vLLM's
+  kernels. All three variants reproduce the reference implementation's
+  composition at the same seed, the banner text included; FP8 and NVFP4
+  differ from BF16 by a mean of 7 and 11/255 per pixel.
 
   For comparison, the reference implementation reports 31 / 26 / 25 GB peak
   on a B200 for BF16 / FP8 / NVFP4, prompt upsampler off.

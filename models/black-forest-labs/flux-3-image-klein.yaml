@@ -1,0 +1,369 @@
+meta:
+  title: "FLUX 3 Image Klein"
+  slug: "flux-3-image-klein"
+  provider: "Black Forest Labs"
+  description: "5.6B open weights image model: text-to-image, editing with reference images and layout control with bounding boxes through one DiT, with Qwen3-VL-4B-Instruct as the text encoder."
+  date_added: 2026-10-15
+  date_updated: 2026-10-15
+  tasks:
+    - omni
+  performance_headline: "One 5.6B DiT for generation, multi-reference editing and bounding-box layout; the distilled checkpoint samples in 16 steps without CFG"
+  related_recipes: []
+  # b200: one B200, Inferact/efn nv/flux3-image (PR #18 + #20) on vllm 0.29.0,
+  # the three serve commands below, t2i + i2i through both endpoints.
+  hardware:
+    b200: verified
+  default_hardware: b200
+
+model:
+  model_id: "black-forest-labs/flux-3-image-klein"
+  # [TO CONFIRM: vLLM-Omni] the first vLLM release whose vLLM-Omni carries
+  # Flux3Pipeline. Until then the image below is the only distribution.
+  min_vllm_version: "0.31.0"
+  docker_image: "vllm/vllm-omni:flux-3"
+  install:
+    docker:
+      note: "FLUX 3 Image Klein support ships in the vllm/vllm-omni:flux-3 image. Download the checkpoint first (below): the server reads the package from a local directory."
+    # `pip: false` hides the pip tab instead of showing a command that cannot
+    # serve the model. Flip it to a real command once a wheel carries Flux3Pipeline.
+    pip: false
+  architecture: dense
+  # DiT 5.6B + Qwen3-VL-4B-Instruct text encoder (4.4B) + autoencoder. The
+  # public "5.6B" figure is the transformer alone.
+  parameter_count: "10B"
+  active_parameters: "10B"
+  context_length: 0
+  # The package ships modular_model_index.json for Diffusers, which the
+  # auto-detector reads first and resolves to the Diffusers class name. Name
+  # the vLLM-Omni pipeline explicitly.
+  base_args:
+    - "--model-class-name"
+    - "Flux3Pipeline"
+    - "--served-model-name"
+    - "flux-3-image-klein"
+  base_env: {}
+
+omni:
+  # Both tasks serve the same local package root; the pipeline reads
+  # config.json there and requires a directory, not a Hub id. The object form
+  # is needed anyway: the catalog's i2i template sends guidance_scale, which
+  # the flow-map checkpoint rejects.
+  tasks:
+    - id: t2i
+      model_id: "/path/to/flux-3-image-klein"
+      description: "Text to image. 16 steps, no CFG, 1024x1024 unless the request sets a size. The example prompt carries five bounding boxes and a text element."
+      curl: |
+        curl -X POST http://localhost:8000/v1/images/generations \
+          -H "Content-Type: application/json" \
+          -d '{
+            "model": "flux-3-image-klein",
+            "prompt": "Macro photograph of a chunky knitted soft sculpture diorama, lit by a low, directional light source from the left that casts long, deep shadows across the textures. Filling the upper background is a dark indigo knitted backdrop. Across the lower third, a chaotic bed of thick looped yarn forms a churning sea. Rising from this base are three massive, conical icebergs constructed of stark white cable-knit yarn, positioned in a rhythmic frontal row: one on the left <iceberg_1>, a slightly taller one on the right <iceberg_2>, and a bulky central peak <iceberg_3>. Clinging to the slopes of the outer icebergs is a rhythmic repetition of tiny, identical pale blue knitted houses. Suspended in the upper frame between the peaks is a slightly curling strip of cream-colored stockinette fabric, bearing thick embroidered text <En_Text_1>. Disrupting the icy white and blue palette, a giant, vibrant magenta knitted whale tail <whale_tail_1> bursts vertically from the center of the teal sea, its thick ribbed surface covered in a halo of stray wool fibers illuminated by the raking light. [{\"id\": \"iceberg_1\", \"bbox\": [300, 50, 750, 350], \"desc\": \"A conical soft sculpture made of stark white, chunky roving yarn in a thick cable-knit pattern. The left side is brightly lit, while the right side falls into deep, fuzzy shadow.\"}, {\"id\": \"iceberg_2\", \"bbox\": [250, 650, 750, 950], \"desc\": \"A tall, asymmetrical peak of white cable-knit yarn, featuring a few visibly dropped stitches near the base and slightly uneven tension in the cables.\"}, {\"id\": \"iceberg_3\", \"bbox\": [200, 300, 650, 700], \"desc\": \"The largest central iceberg, a bulky mound of white and pale grey ribbed knitting, dominating the midground with thick, vertical columns of stitches.\"}, {\"id\": \"En_Text_1\", \"bbox\": [130, 220, 220, 780], \"desc\": \"The exact words \\\"KNITTED ICEBERG VILLAGE\\\" embroidered in thick, raised navy-blue yarn across the cream banner. The lettering is slightly uneven and puckered, conforming to the physical stretch of the knitted fabric beneath it.\"}, {\"id\": \"whale_tail_1\", \"bbox\": [500, 380, 850, 620], \"desc\": \"A giant whale tail knitted from bright magenta and coral-pink yarn, bursting vertically from the teal sea. It features thick ribs, a slightly asymmetrical fluke, and a fuzzy halo of stray wool fibers caught in the directional light.\"}] [{\"id\": \"iceberg_1\", \"bbox\": [300, 50, 750, 350], \"desc\": \"A conical soft sculpture made of stark white, chunky roving yarn in a thick cable-knit pattern. The left side is brightly lit, while the right side falls into deep, fuzzy shadow.\"}, {\"id\": \"iceberg_2\", \"bbox\": [250, 650, 750, 950], \"desc\": \"A tall, asymmetrical peak of white cable-knit yarn, featuring a few visibly dropped stitches near the base and slightly uneven tension in the cables.\"}, {\"id\": \"iceberg_3\", \"bbox\": [200, 300, 650, 700], \"desc\": \"The largest central iceberg, a bulky mound of white and pale grey ribbed knitting, dominating the midground with thick, vertical columns of stitches.\"}, {\"id\": \"En_Text_1\", \"bbox\": [130, 220, 220, 780], \"desc\": \"The exact words \\\"KNITTED ICEBERG VILLAGE\\\" embroidered in thick, raised navy-blue yarn across the cream banner. The lettering is slightly uneven and puckered, conforming to the physical stretch of the knitted fabric beneath it.\"}, {\"id\": \"whale_tail_1\", \"bbox\": [500, 380, 850, 620], \"desc\": \"A giant whale tail knitted from bright magenta and coral-pink yarn, bursting vertically from the teal sea. It features thick ribs, a slightly asymmetrical fluke, and a fuzzy halo of stray wool fibers caught in the directional light.\"}]",
+            "size": "1184x896",
+            "seed": 1
+          }' | jq -r '.data[0].b64_json' | base64 -d > knitted.png
+      benchmark: |
+        python3 /path/to/vllm-omni/benchmarks/diffusion/diffusion_benchmark_serving.py \
+          --base-url http://localhost:8000 \
+          --model flux-3-image-klein \
+          --task t2i \
+          --dataset random \
+          --num-prompts 20 \
+          --num-inference-steps 16
+    - id: i2i
+      model_id: "/path/to/flux-3-image-klein"
+      description: "Editing. Up to 4 reference images per request; the output keeps the first reference's aspect ratio at 1 MP."
+      curl: |
+        curl -X POST http://localhost:8000/v1/chat/completions \
+          -H "Content-Type: application/json" \
+          -d '{
+            "model": "flux-3-image-klein",
+            "messages": [{"role": "user", "content": [
+              {"type": "text", "text": "The same chunky knitted soft sculpture diorama, same three white cable-knit icebergs with tiny pale blue houses, same cream banner with the embroidered words \"KNITTED ICEBERG VILLAGE\", same magenta whale tail, now under a dark indigo night backdrop with a round knitted full moon of cream yarn in the upper right, the raking light cooler and bluer, deep shadows across the yarn sea, a few tiny white embroidered stars above the peaks."},
+              {"type": "image_url", "image_url": {"url": "data:image/png;base64,<BASE64_IMAGE>"}}
+            ]}],
+            "extra_body": {"seed": 1}
+          }' | jq -r '.choices[0].message.content[0].image_url.url' | cut -d',' -f2- | base64 -d > knitted_night.png
+      # The diffusion benchmark's random dataset drives text-to-image. Time
+      # one edit request instead.
+      benchmark: |
+        # Time a single edit request (the random-dataset benchmark is text-to-image only):
+        time curl -s -o /dev/null -X POST http://localhost:8000/v1/chat/completions \
+          -H "Content-Type: application/json" \
+          -d '{"model":"flux-3-image-klein","messages":[{"role":"user","content":[{"type":"text","text":"restyle as a watercolor"},{"type":"image_url","image_url":{"url":"data:image/png;base64,<BASE64_IMAGE>"}}]}],"extra_body":{"num_inference_steps":16,"seed":42}}'
+
+dependencies:
+  # Host-side prerequisite, not a pip install: the server reads the package
+  # from a directory, so this shows under Docker too (bind-mounted read-only).
+  # transformer/ and vae/ are the Diffusers copies of the same weights and are
+  # not read here; leaving them out saves 11 GB. variants/ carries the FP8 and
+  # NVFP4 DiTs for the FP8 / NVFP4 pills.
+  - note: "Download the package to a local directory. 31 GB with the FP8 and NVFP4 variants; add --exclude 'variants/*' for BF16 only (20 GB)."
+    command: "hf download black-forest-labs/flux-3-image-klein --local-dir /path/to/flux-3-image-klein --exclude 'transformer/*' --exclude 'vae/*'"
+    install_modes: [pip, docker]
+
+features: {}
+
+opt_in_features: []
+
+variants:
+  default:
+    label: "BF16"
+    precision: bf16
+    # 20.3 GB of weights (DiT 11.1, text encoder 8.9, autoencoder 0.3).
+    # Measured 22.9 GB on one B200 at 1184x896 after a t2i and an i2i request
+    # (nvidia-smi); the reference implementation reports 31 GB.
+    vram_minimum_gb: 25
+    description: "Root package, BF16 DiT. 22.9 GB on one B200 at 1184x896; 0.92 s per image at 16 steps."
+  fp8:
+    label: "FP8"
+    precision: fp8
+    vram_minimum_gb: 20
+    description: "variants/fp8r: rowwise FP8 DiT (E4M3 weights, fp32 per-row scales), same text encoder and autoencoder. 18.4 GB on one B200; 0.78 s per image."
+    extra_args:
+      - "--stage-overrides"
+      - '{"0":{"additional_config":{"variant":"fp8r"}}}'
+  nvfp4:
+    label: "NVFP4"
+    precision: nvfp4
+    vram_minimum_gb: 19
+    description: "variants/nvfp4: NVFP4 DiT in the ModelOpt layout, Blackwell. 17.5 GB on one B200; 0.78 s per image on vLLM's CUTLASS kernel (PrimsTS not installed)."
+    extra_args:
+      - "--stage-overrides"
+      - '{"0":{"additional_config":{"variant":"nvfp4"}}}'
+
+compatible_strategies: []
+
+hardware_overrides: {}
+
+strategy_overrides: {}
+
+guide: |
+  ## Overview
+
+  FLUX 3 Image Klein is a 5.6B open weights image model from Black Forest Labs.
+  Text-to-image, single-reference edits and multi-reference compositions run
+  through the same transformer, with Qwen3-VL-4B-Instruct as the text encoder.
+  Bounding boxes in the prompt place elements on a 0 to 1000 grid.
+
+  | Checkpoint | Steps | Guidance | Built for |
+  |---|---|---|---|
+  | [flux-3-image-klein](https://huggingface.co/black-forest-labs/flux-3-image-klein) | 16 | none | generation and editing, self-hosting; the checkpoint behind the BFL API |
+  | [flux-3-image-klein-base](https://huggingface.co/black-forest-labs/flux-3-image-klein-base) | 50 | CFG 3.5 | fine-tuning, LoRA training, research |
+
+  This recipe serves the distilled checkpoint. Base has the same package
+  layout and the same variant names, so it runs with the path swapped; its
+  package defaults (50 steps, CFG 3.5) apply when a request omits them.
+
+  The distilled checkpoint is a flow map: 16 Euler steps, no negative prompt,
+  no classifier-free guidance. Base runs 50 steps with CFG, which doubles the
+  per-step cost, so an image costs about 6x more than on the distilled one.
+
+  ## Checkpoint
+
+  The server reads the package from a local directory and takes its sampler
+  defaults from `config.json` there. The Hub id is not accepted as the model
+  argument.
+
+  ```bash
+  hf download black-forest-labs/flux-3-image-klein \
+    --local-dir /path/to/flux-3-image-klein \
+    --exclude 'transformer/*' --exclude 'vae/*'
+  ```
+
+  31 GB. `transformer/` and `vae/` are the Diffusers copies of the same weights
+  and are not read here. Add `--exclude 'variants/*'` for BF16 only (20 GB).
+
+  | File | What | Size |
+  |---|---|---|
+  | `model.safetensors` | DiT, bf16 | 11.1 GB |
+  | `text_encoder/` | Qwen3-VL-4B-Instruct | 8.9 GB |
+  | `ae.safetensors` | autoencoder | 0.3 GB |
+  | `variants/fp8r/` | rowwise FP8 DiT | 6.3 GB |
+  | `variants/nvfp4/` | NVFP4 DiT (ModelOpt layout) | 5.3 GB |
+
+  ## Serving
+
+  ```bash
+  vllm serve /path/to/flux-3-image-klein --omni \
+    --model-class-name Flux3Pipeline \
+    --served-model-name flux-3-image-klein
+  ```
+
+  `--model-class-name` is required: the package also ships
+  `modular_model_index.json` for Diffusers, and the auto-detector reads that
+  file first.
+
+  A quantized DiT is selected by its folder name under `variants/`; the text
+  encoder and autoencoder stay shared:
+
+  ```bash
+  # FP8 (Ada, Hopper, Blackwell)
+  --stage-overrides '{"0":{"additional_config":{"variant":"fp8r"}}}'
+  # NVFP4 (Blackwell)
+  --stage-overrides '{"0":{"additional_config":{"variant":"nvfp4"}}}'
+  ```
+
+  ### PrimsTS kernels
+
+  Optional fused kernels for the FP8 and NVFP4 DiTs on SM100, SM103 and SM107
+  GPUs (B200, GB200, B300, RTX PRO Blackwell). On by default when installed;
+  without them the quantized DiTs run on vLLM's kernels. From a vLLM-Omni
+  checkout:
+
+  ```bash
+  uv pip install -e '.[prims-ts]'
+  ```
+
+  [TO CONFIRM: vLLM-Omni] whether the `flux-3` image includes them. The
+  numbers in this recipe were measured without PrimsTS (vLLM's CUTLASS NVFP4
+  and FP8 kernels). NVFP4 without PrimsTS currently drifts from the reference
+  implementation on B200; with PrimsTS it matches.
+
+  ### FP8 attention
+
+  Quantizes Q and K to FP8 at runtime for the DiT attention, independent of the
+  weight variant. SM100 only, cuDNN 9.17.1 or newer:
+
+  ```bash
+  --diffusion-attention-config '{"default":{"backend":"FLASHINFER_ATTN","quant":{"dtype_qk":"fp8_e4m3"}}}'
+  ```
+
+  ### Parallelism
+
+  `--tensor-parallel-size N` shards the DiT. `--cfg-parallel-size 2` runs the
+  two CFG branches on two GPUs, which only applies to the base checkpoint.
+
+  ## Requests
+
+  Sampling defaults come from the package: 16 steps, no guidance, 1024x1024.
+  A request without `num_inference_steps` returns the same image as one with
+  16. `num_inference_steps`, `seed` and `flow_shift` (the timestep shift, 6.93)
+  can be overridden per request. `guidance_scale` and a non-empty
+  `negative_prompt` are rejected on the distilled checkpoint (HTTP 500,
+  "The sd variant does not support guidance_scale").
+
+  Expect about 5 minutes from `vllm serve` to the first healthy `/health`:
+  regional `torch.compile` of the 43 DiT blocks plus a warmup run. The first
+  request after that costs 1.2-2.9 s; later ones 0.6-0.8 s.
+
+  ### Text to image
+
+  JSON to `/v1/images/generations`. The picture comes back base64-encoded at
+  `.data[0].b64_json`. Sizes are multiples of 16. The prompt below is one of
+  the model's own examples: a caption with `<id>` tags on five elements and a
+  JSON list of boxes at the end (see Bounding boxes).
+
+  ```bash
+  curl -X POST http://localhost:8000/v1/images/generations \
+    -H "Content-Type: application/json" \
+    -d '{"model": "flux-3-image-klein",
+         "prompt": "Macro photograph of a chunky knitted soft sculpture diorama, lit by a low, directional light source from the left that casts long, deep shadows across the textures. Filling the upper background is a dark indigo knitted backdrop. Across the lower third, a chaotic bed of thick looped yarn forms a churning sea. Rising from this base are three massive, conical icebergs constructed of stark white cable-knit yarn, positioned in a rhythmic frontal row: one on the left <iceberg_1>, a slightly taller one on the right <iceberg_2>, and a bulky central peak <iceberg_3>. Clinging to the slopes of the outer icebergs is a rhythmic repetition of tiny, identical pale blue knitted houses. Suspended in the upper frame between the peaks is a slightly curling strip of cream-colored stockinette fabric, bearing thick embroidered text <En_Text_1>. Disrupting the icy white and blue palette, a giant, vibrant magenta knitted whale tail <whale_tail_1> bursts vertically from the center of the teal sea, its thick ribbed surface covered in a halo of stray wool fibers illuminated by the raking light. [{\"id\": \"iceberg_1\", \"bbox\": [300, 50, 750, 350], \"desc\": \"A conical soft sculpture made of stark white, chunky roving yarn in a thick cable-knit pattern. The left side is brightly lit, while the right side falls into deep, fuzzy shadow.\"}, {\"id\": \"iceberg_2\", \"bbox\": [250, 650, 750, 950], \"desc\": \"A tall, asymmetrical peak of white cable-knit yarn, featuring a few visibly dropped stitches near the base and slightly uneven tension in the cables.\"}, {\"id\": \"iceberg_3\", \"bbox\": [200, 300, 650, 700], \"desc\": \"The largest central iceberg, a bulky mound of white and pale grey ribbed knitting, dominating the midground with thick, vertical columns of stitches.\"}, {\"id\": \"En_Text_1\", \"bbox\": [130, 220, 220, 780], \"desc\": \"The exact words \\\"KNITTED ICEBERG VILLAGE\\\" embroidered in thick, raised navy-blue yarn across the cream banner. The lettering is slightly uneven and puckered, conforming to the physical stretch of the knitted fabric beneath it.\"}, {\"id\": \"whale_tail_1\", \"bbox\": [500, 380, 850, 620], \"desc\": \"A giant whale tail knitted from bright magenta and coral-pink yarn, bursting vertically from the teal sea. It features thick ribs, a slightly asymmetrical fluke, and a fuzzy halo of stray wool fibers caught in the directional light.\"}] [{\"id\": \"iceberg_1\", \"bbox\": [300, 50, 750, 350], \"desc\": \"A conical soft sculpture made of stark white, chunky roving yarn in a thick cable-knit pattern. The left side is brightly lit, while the right side falls into deep, fuzzy shadow.\"}, {\"id\": \"iceberg_2\", \"bbox\": [250, 650, 750, 950], \"desc\": \"A tall, asymmetrical peak of white cable-knit yarn, featuring a few visibly dropped stitches near the base and slightly uneven tension in the cables.\"}, {\"id\": \"iceberg_3\", \"bbox\": [200, 300, 650, 700], \"desc\": \"The largest central iceberg, a bulky mound of white and pale grey ribbed knitting, dominating the midground with thick, vertical columns of stitches.\"}, {\"id\": \"En_Text_1\", \"bbox\": [130, 220, 220, 780], \"desc\": \"The exact words \\\"KNITTED ICEBERG VILLAGE\\\" embroidered in thick, raised navy-blue yarn across the cream banner. The lettering is slightly uneven and puckered, conforming to the physical stretch of the knitted fabric beneath it.\"}, {\"id\": \"whale_tail_1\", \"bbox\": [500, 380, 850, 620], \"desc\": \"A giant whale tail knitted from bright magenta and coral-pink yarn, bursting vertically from the teal sea. It features thick ribs, a slightly asymmetrical fluke, and a fuzzy halo of stray wool fibers caught in the directional light.\"}]",
+         "size": "1184x896",
+         "seed": 1}' | jq -r '.data[0].b64_json' | base64 -d > knitted.png
+  ```
+
+  ### Editing
+
+  JSON to `/v1/chat/completions` with the reference as an `image_url` content
+  part. Up to 4 references per request, one part each; the output keeps the
+  first reference's aspect ratio at 1 MP unless `height` and `width` are set.
+  The picture is at `.choices[0].message.content[0].image_url.url`. The edit
+  below takes `knitted.png` from the previous call to night: the caption
+  restates the whole scene and folds the change in.
+
+  ```bash
+  curl -X POST http://localhost:8000/v1/chat/completions \
+    -H "Content-Type: application/json" \
+    -d '{"model": "flux-3-image-klein",
+         "messages": [{"role": "user", "content": [
+           {"type": "text", "text": "The same chunky knitted soft sculpture diorama, same three white cable-knit icebergs with tiny pale blue houses, same cream banner with the embroidered words \"KNITTED ICEBERG VILLAGE\", same magenta whale tail, now under a dark indigo night backdrop with a round knitted full moon of cream yarn in the upper right, the raking light cooler and bluer, deep shadows across the yarn sea, a few tiny white embroidered stars above the peaks."},
+           {"type": "image_url", "image_url": {"url": "data:image/png;base64,<BASE64_IMAGE>"}}
+         ]}],
+         "extra_body": {"seed": 1}}' \
+    | jq -r '.choices[0].message.content[0].image_url.url' | cut -d',' -f2- | base64 -d > knitted_night.png
+  ```
+
+  References are used at their own size, center-cropped to a 16 px grid.
+
+  ### Bounding boxes
+
+  Layout is part of the prompt, so it works on both endpoints. Tag an element
+  in the caption with `<id>` and append a JSON list of boxes; each box is
+  `[top, left, bottom, right]` on a 0 to 1000 grid, each entry carries the
+  element's own `desc`. The text-to-image example above places three
+  icebergs, a banner and a whale tail this way; the shape of one entry:
+
+  ```text
+  ... a cream banner <En_Text_1> ... [{"id": "En_Text_1", "bbox": [130, 220, 220, 780], "desc": "The exact words \"KNITTED ICEBERG VILLAGE\" embroidered in thick, raised navy-blue yarn across the cream banner."}, ...]
+  ```
+
+  Boxes set placement and scale, not a hard mask: an element can extend past
+  its box, and edits can change content outside the requested region. For
+  edits by box, refer to the n-th reference as `<ref_image_n>` and give each
+  element `from`, `src_bbox` and `tgt_bbox`; a `null` target removes it. The
+  full format: [Bounding boxes](https://docs.bfl.ai/flux_3/flux3_image_bounding_boxes).
+
+  ## Prompting
+
+  The caption controls composition; reference images anchor content, they do
+  not lock structure. Write full scene captions: framing, subject, background,
+  lighting. A short prompt gives generic output, and a one-line edit
+  instruction ("make it blue") reframes the shot. For edits, describe the
+  target image as a complete caption of the reference with the edit folded in.
+
+  The reference implementation puts a prompt upsampler
+  ([flux-3-image-klein-pup](https://huggingface.co/black-forest-labs/flux-3-image-klein-pup),
+  a 9B vision-language model) in front of the text encoder to expand short
+  prompts into that form. It is a separate model and not part of this serving
+  path; run it as its own vLLM instance if your prompts are short.
+
+  ## Measured
+
+  One B200, vLLM 0.29.0 with the FLUX 3 pipeline, the three serve commands
+  above and the two requests above (1184x896, 16 steps, seed 1, five boxes
+  and a text element). Memory is `nvidia-smi` after a t2i and an i2i
+  request; seconds are the second request (the first includes warmup).
+
+  | | BF16 | FP8 | NVFP4 |
+  |---|---|---|---|
+  | GPU memory | 22.9 GB | 18.4 GB | 17.5 GB |
+  | text-to-image | 0.92 s | 0.78 s | 0.78 s |
+  | editing, 1 reference | 1.87 s | 1.56 s | 1.48 s |
+  | startup to healthy | 385 s | 294 s | 284 s |
+
+  At 1024x1024 with a plain caption: 0.74 / 0.64 / 0.74 s, 22.6 / 18.1 /
+  17.2 GB. PrimsTS was not installed, so FP8 and NVFP4 ran on vLLM's
+  kernels. All three variants reproduce the reference implementation's
+  composition at the same seed, the banner text included; FP8 and NVFP4
+  differ from BF16 by a mean of 7 and 11/255 per pixel.
+
+  For comparison, the reference implementation reports 31 / 26 / 25 GB peak
+  on a B200 for BF16 / FP8 / NVFP4, prompt upsampler off.
+
+  ## Limitations
+
+  - The model argument must be a local package directory; the Hub id is not
+    downloaded by the server.
+  - Up to 4 reference images per request through vLLM-Omni (the model takes
+    up to 10).
+  - One prompt per request; a batched prompt list is truncated to the first.
+  - Rendered text may be inaccurate or distorted.
+  - Boxes guide placement and scale; small requested elements may not appear.
+  - NVIDIA GPUs only.
+
+  ## License
+
+  The weights are released under the FLUX Kommunity License: non-commercial
+  use, plus commercial output generation by Qualifying Users with less than
+  US$5M in gross annualized revenue, subject to the license terms. See the
+  [model card](https://huggingface.co/black-forest-labs/flux-3-image-klein) and
+  [commercial licensing](https://bfl.ai/licensing). The Qwen3-VL-4B-Instruct
+  text encoder is Apache-2.0.
+
+  ## References
+
+  - [Model card: flux-3-image-klein](https://huggingface.co/black-forest-labs/flux-3-image-klein)
+  - [Model card: flux-3-image-klein-base](https://huggingface.co/black-forest-labs/flux-3-image-klein-base)
+  - [Reference implementation](https://github.com/black-forest-labs/flux-3)
+  - [Model page](https://bfl.ai/models/flux-3-image-klein)
+  - [vLLM-Omni](https://github.com/vllm-project/vllm-omni)
